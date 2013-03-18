@@ -113,6 +113,60 @@ class Tx_T3Less_Controller_BaseController extends Tx_Extbase_MVC_Controller_Acti
         }
     }
 
+    /** Helper functions * */
+
+    /**
+     * getSortOrderPhp
+     * little helper function to respect given sort order defined in TS by using phpcompiler
+     * @param type $file1
+     * @param type $file2
+     * @return int 
+     */
+    function getSortOrderPhp($file1, $file2) {
+        $fileSettings = $this->configuration['phpcompiler']['filesettings'];
+        $tsOptions1 = $fileSettings[substr($file1, 0, -37)];
+        $tsOptions2 = $fileSettings[substr($file2, 0, -37)];
+        $sortOrder1 = $tsOptions1['sortOrder'] ? $tsOptions1['sortOrder'] : 0;
+        $sortOrder2 = $tsOptions2['sortOrder'] ? $tsOptions2['sortOrder'] : 0;
+        $forceOnTop1 = $tsOptions1['forceOnTop'] ? $tsOptions1['forceOnTop'] : FALSE;
+        $forceOnTop2 = $tsOptions2['forceOnTop'] ? $tsOptions2['forceOnTop'] : FALSE;
+        $sortDirection = 1;
+        if($forceOnTop1 || $forceOnTop2) {
+            $sortDirection = -1;
+        }
+
+        if ($sortOrder1 == $sortOrder2) {
+            return 0;
+        }
+        return $sortDirection * (($sortOrder1 < $sortOrder2) ? -1 : 1);
+    }
+
+    /**
+     * getSortOrderJs
+     * little helper function to respect given sort order defined in TS by using jscompiler
+     * @param type $file1
+     * @param type $file2
+     * @return int 
+     */
+    function getSortOrderJs($file1, $file2) {
+        $fileSettings = $this->configuration['jscompiler']['filesettings'];
+        $tsOptions1 = $fileSettings[substr(array_pop(explode('/', $file1)), 0, -5)];
+        $tsOptions2 = $fileSettings[substr(array_pop(explode('/', $file2)), 0, -5)];
+        $sortOrder1 = $tsOptions1['sortOrder'] ? $tsOptions1['sortOrder'] : 0;
+        $sortOrder2 = $tsOptions2['sortOrder'] ? $tsOptions2['sortOrder'] : 0;
+        $forceOnTop1 = $tsOptions1['forceOnTop'] ? $tsOptions1['forceOnTop'] : FALSE;
+        $forceOnTop2 = $tsOptions2['forceOnTop'] ? $tsOptions2['forceOnTop'] : FALSE;
+        $sortDirection = 1;
+        if($forceOnTop1 || $forceOnTop2) {
+            $sortDirection = -1;
+        }
+
+        if ($sortOrder1 == $sortOrder2) {
+            return 0;
+        }
+        return $sortDirection * (($sortOrder1 < $sortOrder2) ? -1 : 1);
+    }
+
 }
 
 ?>

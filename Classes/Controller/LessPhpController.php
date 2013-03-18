@@ -43,29 +43,22 @@ class Tx_T3Less_Controller_LessPhpController extends Tx_T3Less_Controller_BaseCo
     public function lessPhp($files) {
 
         // create outputfolder if it does not exist
-        if (!is_dir($this->outputfolder))
+        if (!is_dir($this->outputfolder)) {
             t3lib_div::mkdir_deep('', $this->outputfolder);
-
-        // register custom functions, #36273
-        $less = new lessc();
-        if (is_array($this->configuration['phpcompiler']['registerFunctions'])) {
-            foreach ($this->configuration['phpcompiler']['registerFunctions'] as $key => $funcRef) {
-                $parts = explode('->', $funcRef);
-
-                if (count($parts) == 2) {
-                    $hookObject = t3lib_div::getUserObj($parts[0]);
-                    if (is_object($hookObject) && method_exists($hookObject, $parts[1])) {
-                        $less->registerFunction($key, array($hookObject, $parts[1]));
-                    }
-                }
-            }
         }
+
+        $less = t3lib_div::makeInstance('lessc');
+        self::checkForAdditionalConfiguration($less);
+
 
         // compile each less-file
         foreach ($files as $file) {
             //get only the name of less file
             $filename = array_pop(explode('/', $file));
-            $outputfile = $this->outputfolder . substr($filename, 0, -5) . '_' . md5_file(($file)) . '.css';
+            
+            $md5 = md5($filename . md5_file($file));
+            
+            $outputfile = $this->outputfolder . substr($filename, 0, -5) . '_' . $md5 . '.css';
 
             if ($this->configuration['other']['forceMode']) {
                 unlink($outputfile);
@@ -74,21 +67,22 @@ class Tx_T3Less_Controller_LessPhpController extends Tx_T3Less_Controller_BaseCo
             if (!file_exists($outputfile)) {
                 if ($this->configuration['other']['compressed']) {
                     $less->setFormatter("compressed");
-                    lessc::ccompile($file, $this->outputfolder . substr($filename, 0, -5) . '_' . md5_file(($file)) . '.css', $less);
+                    lessc::ccompile($file, $this->outputfolder . substr($filename, 0, -5) . '_' . $md5 . '.css', $less);
                 } else {
-                    lessc::ccompile($file, $this->outputfolder . substr($filename, 0, -5) . '_' . md5_file(($file)) . '.css');
+                    lessc::ccompile($file, $this->outputfolder . substr($filename, 0, -5) . '_' . $md5 . '.css');
                 }
                 t3lib_div::fixPermissions($outputfile, FALSE);
             }
         }
+        
         // unlink compiled files which have no equal source less-file
         if ($this->configuration['other']['unlinkCssFilesWithNoSourceFile'] == 1) {
             self::unlinkGeneratedFilesWithNoSourceFile($files);
         }
-        
+
         $files = t3lib_div::getFilesInDir($this->outputfolder, "css");
         //respect given sort order defined in TS 
-        usort($files, array(self, 'getSortOrderPhp'));
+        usort($files, array($this, 'getSortOrderPhp'));
 
         foreach ($files as $cssFile) {
             $excludeFromPageRender = $this->configuration['phpcompiler']['filesettings'][substr($cssFile, 0, -37)]['excludeFromPageRenderer'];
@@ -108,43 +102,53 @@ class Tx_T3Less_Controller_LessPhpController extends Tx_T3Less_Controller_BaseCo
      * Only for mode "PHP-Compiler"
      */
     public function unlinkGeneratedFilesWithNoSourceFile($sourceFiles) {
+        
         // all available sourcefiles 
         //$sourceFiles = t3lib_div::getFilesInDir($this->lessfolder, "less");
         // build array with md5 values from sourcefiles
+        $srcArr = array();
         foreach ($sourceFiles as $file) {
-            $srcArr[] .= md5_file($file);
+            
+            $filename = array_pop(explode('/', $file));
+            
+            $md5 = md5($filename . md5_file($file));
+            
+            $srcArr[] .= $md5;
         }
 
         // unlink every css file, which have no equal less-file
         // checked by comparing md5-string from filename with md5_file(sourcefile)
         foreach (t3lib_div::getFilesInDir($this->outputfolder, "css") as $cssFile) {
-            $md5 = substr(substr($cssFile, 0, -4), -32);
-            if (!in_array($md5, $srcArr)) {
+            $md5str = substr(substr($cssFile, 0, -4), -32);
+            if (!in_array($md5str, $srcArr)) {
                 unlink($this->outputfolder . $cssFile);
             }
         }
     }
 
-    /** Helper functions * */
+    public function checkForAdditionalConfiguration($less) {
 
-    /**
-     * getSortOrderPhp
-     * little helper function to respect given sort order defined in TS by using phpcompiler
-     * @param type $file1
-     * @param type $file2
-     * @return int 
-     */
-    function getSortOrderPhp($file1, $file2) {
-        $fileSettings = $this->configuration['phpcompiler']['filesettings'];
-        $tsOptions1 = $fileSettings[substr($file1, 0, -37)];
-        $tsOptions2 = $fileSettings[substr($file2, 0, -37)];
-        $sortOrder1 = $tsOptions1['sortOrder'] ? $tsOptions1['sortOrder'] : 0;
-        $sortOrder2 = $tsOptions2['sortOrder'] ? $tsOptions2['sortOrder'] : 0;
-
-        if ($sortOrder1 == $sortOrder2) {
-            return 0;
+        /* Define directories for @import scripts */
+        if (isset($this->configuration['other']['importDirs'])) {
+            $importDirs = explode(',', str_replace(', ', ',', $this->configuration['other']['importDirs']));
+            foreach ($importDirs as $importDir) {
+                $less->addImportDir(Tx_T3Less_Utility_ResolvePath::getPath($importDir));
+            }
         }
-        return ($sortOrder1 < $sortOrder2) ? -1 : 1;
+        // register custom functions, #36273
+
+        if (is_array($this->configuration['phpcompiler']['registerFunctions'])) {
+            foreach ($this->configuration['phpcompiler']['registerFunctions'] as $key => $funcRef) {
+                $parts = explode('->', $funcRef);
+
+                if (count($parts) == 2) {
+                    $hookObject = t3lib_div::getUserObj($parts[0]);
+                    if (is_object($hookObject) && method_exists($hookObject, $parts[1])) {
+                        $less->registerFunction($key, array($hookObject, $parts[1]));
+                    }
+                }
+            }
+        }
     }
 
 }
